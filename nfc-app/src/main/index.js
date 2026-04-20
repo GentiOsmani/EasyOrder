@@ -31,10 +31,19 @@ function normalizeAppMode(value) {
 }
 
 function resolveAppMode() {
-  const envMode = normalizeAppMode(process.env.EASYORDER_APP_MODE)
-  if (process.env.EASYORDER_APP_MODE) return envMode
+  if (process.env.EASYORDER_APP_MODE) {
+    return normalizeAppMode(process.env.EASYORDER_APP_MODE)
+  }
+
+  const exeName = path.basename(process.execPath || '').toLowerCase()
+  if (exeName.includes('admin')) return 'admin'
+  if (exeName.includes('staff')) return 'staff'
+
   const appName = String(app.getName() || '').toLowerCase()
-  return appName.includes('admin') ? 'admin' : 'staff'
+  if (appName.includes('admin')) return 'admin'
+  if (appName.includes('staff')) return 'staff'
+
+  return 'staff'
 }
 
 const APP_MODE = resolveAppMode()
