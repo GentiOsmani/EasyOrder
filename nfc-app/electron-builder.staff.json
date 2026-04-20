@@ -1,0 +1,48 @@
+{
+  "appId": "com.easyorder.staff",
+  "productName": "EasyOrder Staff Terminal",
+  "directories": {
+    "output": "release/staff"
+  },
+  "files": [
+    "out/**/*",
+    "data/**/*",
+    "client/**/*",
+    "node_modules/**/*",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "data",
+      "to": "data"
+    },
+    {
+      "from": "client",
+      "to": "client"
+    },
+    {
+      "from": "imgs",
+      "to": "imgs"
+    }
+  ],
+  "win": {
+    "target": [
+      "nsis"
+    ],
+    "executableName": "EasyOrderStaff",
+    "icon": "imgs/logo_icon.ico",
+    "signAndEditExecutable": false,
+    "sign": null
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "installerSidebar": null,
+    "installerIcon": "imgs/logo_icon.ico",
+    "uninstallerIcon": "imgs/logo_icon.ico",
+    "createDesktopShortcut": "always",
+    "createStartMenuShortcut": true,
+    "shortcutName": "EasyOrder Staff Terminal"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "name": "nfc-app",
+  "version": "1.0.0",
+  "description": "Restaurant NFC ordering system",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite build && SET ELECTRON_RUN_AS_NODE=&& node_modules\\electron\\dist\\electron.exe .",
+    "dist": "npm run dist:staff",
+    "dist:staff": "cross-env EASYORDER_APP_MODE=staff electron-vite build && electron-builder --win --config electron-builder.staff.json",
+    "dist:admin": "cross-env EASYORDER_APP_MODE=admin electron-vite build && electron-builder --win --config electron-builder.admin.json"
+  },
+  "build": {
+    "appId": "com.easyorder.app",
+    "productName": "EasyOrder",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "data/**/*",
+      "client/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "data",
+        "to": "data"
+      },
+      {
+        "from": "client",
+        "to": "client"
+      },
+      {
+        "from": "imgs",
+        "to": "imgs"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "executableName": "EasyOrder",
+      "icon": "imgs/logo_icon.ico",
+      "signAndEditExecutable": false,
+      "sign": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerSidebar": null,
+      "installerIcon": "imgs/logo_icon.ico",
+      "uninstallerIcon": "imgs/logo_icon.ico",
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "EasyOrder"
+    }
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "lowdb": "^1.0.0",
+    "socket.io": "^4.6.1",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "electron": "25.9.8",
+    "electron-builder": "^24.9.1",
+    "electron-vite": "^2.0.0",
+    "postcss": "^8.4.32",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "socket.io-client": "^4.6.1",
+    "tailwindcss": "^3.4.0"
+  }
+}
