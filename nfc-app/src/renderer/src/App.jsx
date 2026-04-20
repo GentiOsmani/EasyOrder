@@ -6,7 +6,7 @@ import AdminPanel from './components/AdminPanel'
 import ManagerPanel from './components/ManagerPanel'
 import Header from './components/Header'
 
-const DEFAULT_SERVER_URL = 'https://easyorder-19ze.onrender.com'
+const DEFAULT_SERVER_URL = 'http://localhost:3001'
 
 function getAppModeFromLocation() {
   try {
@@ -24,10 +24,6 @@ function normalizeServerUrl(value) {
   return `http://${raw}`
 }
 
-function shouldFallbackToCloud(url) {
-  return /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/i.test(String(url || ''))
-}
-
 export default function App() {
   const appMode = getAppModeFromLocation()
   const [user, setUser] = useState(null)
@@ -36,8 +32,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(appMode !== 'staff')
   const [serverUrl, setServerUrl] = useState(() => {
     try {
-      const normalized = normalizeServerUrl(localStorage.getItem('serverUrl') || DEFAULT_SERVER_URL)
-      return shouldFallbackToCloud(normalized) ? DEFAULT_SERVER_URL : normalized
+      return normalizeServerUrl(localStorage.getItem('serverUrl') || DEFAULT_SERVER_URL)
     } catch {
       return DEFAULT_SERVER_URL
     }
@@ -48,25 +43,41 @@ export default function App() {
   useEffect(() => {
     if (appMode !== 'staff') return
     let cancelled = false
+    let retryTimer = null
+    let attempt = 0
+    const MAX_ATTEMPTS = 20
 
-    fetch(`${serverUrl}/api/auth/device-binding?appMode=${appMode}`)
-      .then(async (r) => {
-        if (!r.ok) throw new Error('Failed')
-        return await r.json()
-      })
-      .then((data) => {
-        if (cancelled) return
-        if (data?.locked && data?.user) {
-          setUser(data.user)
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setAuthReady(true)
-      })
+    const tryBootstrapBinding = () => {
+      attempt += 1
+
+      fetch(`${serverUrl}/api/auth/device-binding?appMode=${appMode}`)
+        .then(async (r) => {
+          if (!r.ok) throw new Error('Failed')
+          return await r.json()
+        })
+        .then((data) => {
+          if (cancelled) return
+          if (data?.locked && data?.user) {
+            setUser(data.user)
+          }
+          setAuthReady(true)
+        })
+        .catch(() => {
+          if (cancelled) return
+          if (attempt >= MAX_ATTEMPTS) {
+            setAuthReady(true)
+            return
+          }
+          retryTimer = setTimeout(tryBootstrapBinding, 350)
+        })
+    }
+
+    setAuthReady(false)
+    tryBootstrapBinding()
 
     return () => {
       cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
     }
   }, [appMode, serverUrl])
 
@@ -112,10 +123,18 @@ export default function App() {
   }, [])
 
   const handleLogin  = useCallback((userData) => setUser(userData), [])
-  const handleLogout = useCallback(() => {
-    if (appMode === 'staff') return
+  const handleLogout = useCallback(async () => {
+    if (appMode === 'staff') {
+      try {
+        await fetch(`${serverUrl}/api/auth/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ appMode })
+        })
+      } catch {}
+    }
     setUser(null)
-  }, [appMode])
+  }, [appMode, serverUrl])
 
   if (!authReady) {
     return (

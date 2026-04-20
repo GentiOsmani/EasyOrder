@@ -54,11 +54,9 @@ export default function Header({ user, onLogout, connected, serverInfo, restaura
         >
           {isFullscreen ? '⛶' : '⛶'}
         </button>
-        {appMode !== 'staff' && (
-          <button onClick={onLogout} className="px-3 py-1.5 text-sm bg-white/80 hover:bg-white text-stone-500 hover:text-stone-700 border border-stone-200/60 rounded-lg transition-all">
-            Logout
-          </button>
-        )}
+        <button onClick={onLogout} className="px-3 py-1.5 text-sm bg-white/80 hover:bg-white text-stone-500 hover:text-stone-700 border border-stone-200/60 rounded-lg transition-all">
+          Logout
+        </button>
       </div>
     </header>
   )

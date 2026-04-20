@@ -343,6 +343,14 @@ expressApp.get('/api/auth/device-binding', (req, res) => {
   })
 })
 
+expressApp.post('/api/auth/logout', (req, res) => {
+  const appMode = normalizeAppMode(req.body?.appMode || APP_MODE)
+  if (appMode === 'staff') {
+    clearStaffTerminalBinding()
+  }
+  return res.json({ ok: true, appMode })
+})
+
 expressApp.get('/api/users', (req, res) => {
   const restaurantId = parseRestaurantId(req.query.restaurantId)
   res.json(getStaffUsers(restaurantId))
