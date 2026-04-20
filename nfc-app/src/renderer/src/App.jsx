@@ -7,6 +7,7 @@ import ManagerPanel from './components/ManagerPanel'
 import Header from './components/Header'
 
 const DEFAULT_SERVER_URL = 'http://localhost:3001'
+const STAFF_SESSION_KEY = 'staffSessionUser'
 
 function getAppModeFromLocation() {
   try {
@@ -45,20 +46,45 @@ export default function App() {
     let cancelled = false
     let retryTimer = null
     let attempt = 0
-    const MAX_ATTEMPTS = 20
+    const MAX_ATTEMPTS = 8
+
+    let cachedUser = null
+    try {
+      cachedUser = JSON.parse(localStorage.getItem(STAFF_SESSION_KEY) || 'null')
+    } catch {
+      cachedUser = null
+    }
+
+    if (cachedUser?.id && cachedUser?.role) {
+      setUser(cachedUser)
+      setAuthReady(true)
+    }
 
     const tryBootstrapBinding = () => {
       attempt += 1
 
       fetch(`${serverUrl}/api/auth/device-binding?appMode=${appMode}`)
         .then(async (r) => {
-          if (!r.ok) throw new Error('Failed')
+          if (!r.ok) {
+            if (r.status >= 400 && r.status < 500) {
+              return { unsupported: true, status: r.status }
+            }
+            throw new Error('Retryable')
+          }
           return await r.json()
         })
         .then((data) => {
           if (cancelled) return
+          if (data?.unsupported) {
+            if (!cachedUser) setAuthReady(true)
+            return
+          }
           if (data?.locked && data?.user) {
             setUser(data.user)
+            try { localStorage.setItem(STAFF_SESSION_KEY, JSON.stringify(data.user)) } catch {}
+          } else {
+            setUser(null)
+            try { localStorage.removeItem(STAFF_SESSION_KEY) } catch {}
           }
           setAuthReady(true)
         })
@@ -68,11 +94,11 @@ export default function App() {
             setAuthReady(true)
             return
           }
-          retryTimer = setTimeout(tryBootstrapBinding, 350)
+          retryTimer = setTimeout(tryBootstrapBinding, 500)
         })
     }
 
-    setAuthReady(false)
+    if (!cachedUser) setAuthReady(false)
     tryBootstrapBinding()
 
     return () => {
@@ -122,9 +148,15 @@ export default function App() {
     try { localStorage.setItem('serverUrl', normalized) } catch {}
   }, [])
 
-  const handleLogin  = useCallback((userData) => setUser(userData), [])
+  const handleLogin  = useCallback((userData) => {
+    if (appMode === 'staff') {
+      try { localStorage.setItem(STAFF_SESSION_KEY, JSON.stringify(userData)) } catch {}
+    }
+    setUser(userData)
+  }, [appMode])
   const handleLogout = useCallback(async () => {
     if (appMode === 'staff') {
+      try { localStorage.removeItem(STAFF_SESSION_KEY) } catch {}
       try {
         await fetch(`${serverUrl}/api/auth/logout`, {
           method: 'POST',
