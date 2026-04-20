@@ -5,6 +5,7 @@ let currentOrderId = null, activeCatId = null, socket = null
 let restaurant = { id: null, name: 'Restaurant', logoUrl: '' }
 let statusPollInterval = null
 let currentClientStatus = null
+let orderAccessToken = null
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function show(id) {
@@ -162,23 +163,36 @@ async function placeOrder() {
   const btn = document.getElementById('order-btn')
   btn.disabled = true; btn.textContent = 'Placing order…'
   try {
+    if (!orderAccessToken) {
+      throw new Error('SESSION_EXPIRED')
+    }
+
     const res = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tableId,
+        orderAccessToken,
         items: Object.entries(cart).map(([id,qty]) => ({ menuItemId: parseInt(id), quantity: qty })),
         customerName: document.getElementById('customer-name').value.trim() || 'Guest'
       })
     })
-    if (!res.ok) throw new Error()
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err?.error || 'ORDER_FAILED')
+    }
+    orderAccessToken = null
     const order = await res.json()
     currentOrderId = order.id
     cart = {}
     showStatus(order)
     pollOrderStatus()
-  } catch {
-    alert('Could not place order. Please try again.')
+  } catch (err) {
+    if (String(err?.message || '').toLowerCase().includes('tap nfc again') || err?.message === 'SESSION_EXPIRED') {
+      alert('Session expired. Please tap NFC again to place a new order.')
+    } else {
+      alert('Could not place order. Please try again.')
+    }
     btn.disabled = false; btn.textContent = 'Confirm Order'
   }
 }
@@ -273,6 +287,7 @@ async function init() {
     restaurant = data.restaurant || restaurant
     categories = data.menu.categories
     menuItems  = data.menu.items.filter(i => i.available)
+    orderAccessToken = data.orderAccessToken || null
     activeCatId = categories[0]?.id || null
 
     const tableName = data.table?.name || `Table ${tableId}`

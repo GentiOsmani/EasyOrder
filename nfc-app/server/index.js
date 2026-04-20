@@ -15,6 +15,38 @@ function normalizeAppMode(value) {
 }
 
 const APP_MODE = normalizeAppMode(process.env.EASYORDER_APP_MODE || 'staff')
+const CLIENT_ORDER_SESSION_TTL_MS = 10 * 60 * 1000
+const clientOrderSessions = new Map()
+
+function issueClientOrderSession(tableId) {
+  const key = String(tableId)
+  const token = `${genId()}-${Math.random().toString(36).slice(2)}`
+  const expiresAt = Date.now() + CLIENT_ORDER_SESSION_TTL_MS
+  clientOrderSessions.set(key, { token, expiresAt, used: false })
+  return { token, expiresAt }
+}
+
+function consumeClientOrderSession(tableId, token) {
+  const key = String(tableId)
+  const session = clientOrderSessions.get(key)
+  if (!session || !token) {
+    return { ok: false, error: 'Session expired. Please tap NFC again.' }
+  }
+  if (session.used) {
+    return { ok: false, error: 'Session already used. Please tap NFC again.' }
+  }
+  if (Date.now() > session.expiresAt) {
+    clientOrderSessions.delete(key)
+    return { ok: false, error: 'Session expired. Please tap NFC again.' }
+  }
+  if (session.token !== token) {
+    return { ok: false, error: 'Invalid session. Please tap NFC again.' }
+  }
+
+  session.used = true
+  clientOrderSessions.set(key, session)
+  return { ok: true }
+}
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 const clientDir = path.join(__dirname, 'client')
@@ -461,11 +493,15 @@ expressApp.get('/api/client/context/:tableId', (req, res) => {
   const data = getRestaurantByTableId(tableId)
   if (!data) return res.status(404).json({ error: 'Table not found' })
 
+  const orderSession = issueClientOrderSession(tableId)
+
   const restaurantId = data.table.restaurantId || DEFAULT_RESTAURANT_ID
   res.json({
     table: data.table,
     restaurant: data.restaurant || { id: restaurantId, name: 'Restaurant', logoUrl: '' },
-    menu: getMenuData(restaurantId)
+    menu: getMenuData(restaurantId),
+    orderAccessToken: orderSession.token,
+    orderAccessExpiresAt: orderSession.expiresAt
   })
 })
 
@@ -589,10 +625,16 @@ expressApp.delete('/api/tables/:id', (req, res) => {
 })
 
 expressApp.post('/api/orders', (req, res) => {
-  const { tableId, items, customerName } = req.body
+  const { tableId, items, customerName, orderAccessToken } = req.body
   if (!tableId || !items || items.length === 0) {
     return res.status(400).json({ error: 'Invalid order data' })
   }
+
+  const access = consumeClientOrderSession(tableId, orderAccessToken)
+  if (!access.ok) {
+    return res.status(403).json({ error: access.error })
+  }
+
   const table = db.get('tables').find({ id: tableId }).value()
   if (!table) return res.status(404).json({ error: 'Table not found' })
 
