@@ -48,7 +48,6 @@ export default function Header({ user, onLogout, connected, serverInfo, restaura
         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${roleColors[user.role] || 'bg-stone-100 text-stone-600'}`}>
           {roleLabels[user.role] || user.role}
         </span>
-        <span className="text-sm text-stone-600 font-medium">{user.username}</span>
         <button 
           onClick={toggleFullscreen}
           className="px-3 py-1.5 text-sm bg-white/80 hover:bg-white text-stone-500 hover:text-stone-700 border border-stone-200/60 rounded-lg transition-all"
