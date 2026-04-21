@@ -3,7 +3,6 @@ import { useState } from 'react'
 export default function Login({ onLogin, serverUrl, onServerUrlChange, appMode = 'staff' }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [serverInput, setServerInput] = useState(serverUrl || 'http://localhost:3001')
   const [error, setError]     = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -18,7 +17,7 @@ export default function Login({ onLogin, serverUrl, onServerUrlChange, appMode =
     e.preventDefault()
     setError('')
     setLoading(true)
-    const effectiveServerUrl = normalizeServerUrl(serverInput)
+    const effectiveServerUrl = normalizeServerUrl(serverUrl)
     onServerUrlChange?.(effectiveServerUrl)
     try {
       const res  = await fetch(`${effectiveServerUrl}/api/auth/login`, {
@@ -46,18 +45,6 @@ export default function Login({ onLogin, serverUrl, onServerUrlChange, appMode =
         </div>
         <form onSubmit={handleSubmit} className="bg-white/78 border border-stone-200/40 rounded-2xl p-8 shadow-[0_4px_24px_rgba(0,0,0,0.06)] backdrop-blur-lg">
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-stone-500 mb-1.5">Server URL</label>
-              <input
-                className="input"
-                type="text"
-                placeholder="http://192.168.x.x:3001"
-                value={serverInput}
-                onChange={e => setServerInput(e.target.value)}
-                onBlur={() => onServerUrlChange?.(serverInput)}
-                required
-              />
-            </div>
             <div>
               <label className="block text-sm font-medium text-stone-500 mb-1.5">Username</label>
               <input className="input" type="text" placeholder={appMode === 'admin' ? 'admin' : 'bartender / manager'}

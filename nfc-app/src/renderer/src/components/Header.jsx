@@ -35,7 +35,9 @@ export default function Header({ user, onLogout, connected, serverInfo, restaura
         )}
         <div>
           <h1 className="text-lg font-bold leading-tight">{restaurant?.name || 'Restaurant NFC System'}</h1>
-          <p className="text-xs text-stone-400">Server: {serverInfo.ip}:{serverInfo.port}</p>
+          {appMode === 'admin' && (
+            <p className="text-xs text-stone-400">Server: {serverInfo.ip}:{serverInfo.port}</p>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-3">
