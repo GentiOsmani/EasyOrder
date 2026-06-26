@@ -18,7 +18,16 @@ const fs   = require('fs')
 const isPacked      = app.isPackaged
 const PROJECT_ROOT  = path.join(__dirname, '../..')
 const clientDir     = isPacked ? path.join(process.resourcesPath, 'client') : path.join(PROJECT_ROOT, 'client')
-const dataDir       = isPacked ? path.join(process.resourcesPath, 'data')   : path.join(PROJECT_ROOT, 'data')
+// Persistent, user-writable, SHARED data dir for both Admin and Staff apps.
+// Using a fixed appData subfolder ('EasyOrder') ensures Admin and Staff terminals
+// read/write the SAME db.json, and that data survives reinstalls/restarts.
+// (process.resourcesPath used to be the data dir but it lives inside Program Files
+//  which is read-only/virtualized on Windows, causing data loss on restart.)
+const sharedDataDir = isPacked
+  ? path.join(app.getPath('appData'), 'EasyOrder', 'data')
+  : path.join(PROJECT_ROOT, 'data')
+const dataDir       = sharedDataDir
+const legacyDataDir = isPacked ? path.join(process.resourcesPath, 'data') : null
 const iconPath      = isPacked ? path.join(process.resourcesPath, 'imgs', 'logo_icon.ico') : path.join(PROJECT_ROOT, 'imgs', 'logo_icon.ico')
 const rendererDir   = path.join(__dirname, '../renderer')    // out/renderer/
 
@@ -82,6 +91,21 @@ function consumeClientOrderSession(tableId, token) {
 
 // ─── Database Setup ───────────────────────────────────────────────────────────
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true })
+
+// One-time migration: if a db.json exists in the legacy resources/data dir
+// (older builds), copy it to the new shared user-writable location so users
+// don't lose their existing tables/menu after upgrading.
+try {
+  const newDbPath = path.join(dataDir, 'db.json')
+  if (legacyDataDir) {
+    const legacyDbPath = path.join(legacyDataDir, 'db.json')
+    if (!fs.existsSync(newDbPath) && fs.existsSync(legacyDbPath)) {
+      fs.copyFileSync(legacyDbPath, newDbPath)
+    }
+  }
+} catch (e) {
+  console.error('[db] legacy migration skipped:', e?.message || e)
+}
 
 const adapter = new FileSync(path.join(dataDir, 'db.json'))
 const db = low(adapter)
@@ -603,6 +627,7 @@ expressApp.post('/api/tables', (req, res) => {
     name: req.body.name || `Module ${moduleId}`,
     esp32Ip: req.body.esp32Ip || '',
     esp32Id: req.body.esp32Id || '',
+    nfcUid: req.body.nfcUid || '',
     active: true
   }
   db.get('tables').push(table).write()
@@ -750,6 +775,7 @@ io.on('connection', (socket) => {
     if (!order.seenByBartender) {
       order.seenByBartender = true
       io.to(`table:${order.tableId}`).emit('order:preparing', { orderId: order.id })
+      sendToESP32(order.tableId, 'order:preparing', {})
     }
     order.updatedAt = new Date().toISOString()
     db.get('orders').find({ id: orderId }).assign(order).write()
@@ -769,6 +795,7 @@ io.on('connection', (socket) => {
         emitOrderUpdated(order)
       }
       io.to(`table:${order.tableId}`).emit('order:preparing', { orderId: order.id })
+      sendToESP32(order.tableId, 'order:preparing', {})
     })
   })
 

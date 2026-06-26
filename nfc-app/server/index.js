@@ -574,6 +574,7 @@ expressApp.post('/api/tables', (req, res) => {
     name: req.body.name || `Module ${moduleId}`,
     esp32Ip: req.body.esp32Ip || '',
     esp32Id: req.body.esp32Id || '',
+    nfcUid: req.body.nfcUid || '',
     active: true
   }
   db.get('tables').push(table).write()
@@ -721,6 +722,7 @@ io.on('connection', (socket) => {
     if (!order.seenByBartender) {
       order.seenByBartender = true
       io.to(`table:${order.tableId}`).emit('order:preparing', { orderId: order.id })
+      sendToESP32(order.tableId, 'order:preparing', {})
     }
     order.updatedAt = new Date().toISOString()
     db.get('orders').find({ id: orderId }).assign(order).write()
@@ -740,6 +742,7 @@ io.on('connection', (socket) => {
         emitOrderUpdated(order)
       }
       io.to(`table:${order.tableId}`).emit('order:preparing', { orderId: order.id })
+      sendToESP32(order.tableId, 'order:preparing', {})
     })
   })
 

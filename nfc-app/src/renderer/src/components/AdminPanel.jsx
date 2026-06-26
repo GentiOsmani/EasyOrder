@@ -26,6 +26,10 @@ export default function AdminPanel({ socket, serverUrl, serverInfo }) {
   const [form, setForm]                = useState({})
   const [saving, setSaving]            = useState(false)
   const [msg, setMsg]                  = useState(null)
+  const [stickerBaseUrl, setStickerBaseUrl] = useState(() => {
+    try { return localStorage.getItem('stickerBaseUrl') || '' } catch { return '' }
+  })
+  const [copiedId, setCopiedId]        = useState(null)
   const selectedRestaurantRef          = useRef(null)
 
   const selectedRestaurant = restaurants.find(r => r.id === selectedRestaurantId) || null
@@ -170,19 +174,38 @@ export default function AdminPanel({ socket, serverUrl, serverInfo }) {
   }
   async function deleteCat(id) { if (!confirm('Delete category and all its items?')) return; await apiCall('DELETE', `/api/menu/categories/${id}`); notify('Category deleted!') }
 
-  function openAddTable()  { setForm({ name: '', moduleId: '', esp32Ip: '' }); setModal('addTable') }
+  function openAddTable()  { setForm({ name: '', moduleId: '', nfcUid: '' }); setModal('addTable') }
   function openEditTable(t){ setForm({ ...t }); setModal('editTable') }
+
+  function handleStickerBaseUrlChange(val) {
+    setStickerBaseUrl(val)
+    try { localStorage.setItem('stickerBaseUrl', val) } catch {}
+  }
+
+  function getStickerUrl(tableId) {
+    const base = stickerBaseUrl.replace(/\/+$/, '')
+    if (!base) return null
+    return `${base}?server=${serverUrl}&table=${tableId}`
+  }
+
+  function copyToClipboard(text, id) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedId(id)
+      setTimeout(() => setCopiedId(null), 2000)
+    }).catch(() => {})
+  }
+
   async function saveTable() {
     if (!selectedRestaurantId) return notify('Please select a restaurant first', false)
     const moduleId = parseInt(form.moduleId, 10)
     if (!String(form.name || '').trim()) return notify('Display name is required', false)
     if (!Number.isInteger(moduleId) || moduleId < 1 || moduleId > 100) {
-      return notify('Module ID must be between 1 and 100', false)
+      return notify('Table ID must be between 1 and 100', false)
     }
     const body = {
       name: form.name,
       moduleId,
-      esp32Ip: form.esp32Ip || '',
+      nfcUid: form.nfcUid || '',
       restaurantId: selectedRestaurantId
     }
     const result = await apiCall(modal === 'addTable' ? 'POST' : 'PUT', modal === 'addTable' ? '/api/tables' : `/api/tables/${form.id}`, body)
@@ -232,7 +255,7 @@ export default function AdminPanel({ socket, serverUrl, serverInfo }) {
         {['restaurants', 'staff', 'menu', 'tables', 'info'].map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize transition-all ${tab === t ? 'bg-white text-stone-800 shadow-sm ring-1 ring-stone-200/50' : 'text-stone-500 hover:text-stone-700 hover:bg-white/50'}`}>
-            {t === 'restaurants' ? '🏢 Restaurants' : t === 'staff' ? '👥 Staff' : t === 'menu' ? '🍴 Menu' : t === 'tables' ? '📟 NFC Modules' : 'ℹ️ System Info'}
+            {t === 'restaurants' ? '🏢 Restaurants' : t === 'staff' ? '👥 Staff' : t === 'menu' ? '🍴 Menu' : t === 'tables' ? '🏷️ Tables & Stickers' : 'ℹ️ System Info'}
           </button>
         ))}
         {(tab === 'menu' || tab === 'tables') && (
@@ -364,29 +387,51 @@ export default function AdminPanel({ socket, serverUrl, serverInfo }) {
         {tab === 'tables' && (
           <div className="max-w-3xl space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-stone-800">NFC Module Setup (ID 1-100)</h2>
-              <button onClick={openAddTable} className="btn-primary" disabled={!selectedRestaurantId}>+ Add Module</button>
+              <h2 className="text-xl font-bold text-stone-800">Tables & NTAG Sticker Setup</h2>
+              <button onClick={openAddTable} className="btn-primary" disabled={!selectedRestaurantId}>+ Add Table</button>
             </div>
             {selectedRestaurant && <p className="text-sm text-amber-700/80">Restaurant: {selectedRestaurant.name}</p>}
-            <p className="text-stone-400 text-sm">
-              ESP32 WebSocket endpoint:&nbsp;
-              <code className="px-2 py-0.5 bg-stone-100 rounded text-amber-700 text-xs font-mono">ws://{serverInfo.ip}:{serverInfo.port}/esp32</code>
-            </p>
-            {!selectedRestaurantId ? <div className="card text-center py-10 text-stone-400">Please add and select a restaurant first.</div> : tables.length === 0 ? <div className="card text-center py-10 text-stone-400">No modules added yet.</div> : (
+            <div className="card bg-stone-50/80 space-y-2">
+              <p className="text-xs font-medium text-stone-600">Menu page URL (GitHub Pages or local)</p>
+              <input
+                className="input text-xs font-mono"
+                placeholder="e.g. https://yourname.github.io/EasyOrder/"
+                value={stickerBaseUrl}
+                onChange={e => handleStickerBaseUrlChange(e.target.value)}
+              />
+              <p className="text-xs text-stone-400">Set this once — every table card below will show the exact URL to write to its NTAG sticker.</p>
+            </div>
+            {!selectedRestaurantId ? <div className="card text-center py-10 text-stone-400">Please add and select a restaurant first.</div> : tables.length === 0 ? <div className="card text-center py-10 text-stone-400">No tables added yet.</div> : (
               <div className="space-y-3">
-                {tables.map(t => (
-                  <div key={t.id} className="card flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-stone-800">{t.name} <span className="text-amber-700/70">(Module #{t.moduleId || t.id})</span></p>
-                      <p className="text-xs text-stone-400">Menu URL: <span className="text-amber-700 font-mono">http://{serverInfo.ip}:{serverInfo.port}/menu/{t.id}</span></p>
-                      {t.esp32Ip && <p className="text-xs text-stone-400">ESP32 IP: {t.esp32Ip}</p>}
+                {tables.map(t => {
+                  const stickerUrl = getStickerUrl(t.id)
+                  return (
+                    <div key={t.id} className="card space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-stone-800">{t.name} <span className="text-amber-700/70">(Table #{t.moduleId || t.id})</span></p>
+                        <div className="flex gap-2">
+                          <button onClick={() => openEditTable(t)} className="btn-secondary text-sm py-1.5 px-3">Edit</button>
+                          <button onClick={() => deleteTable(t.id)} className="btn-danger text-sm py-1.5 px-3">Delete</button>
+                        </div>
+                      </div>
+                      {t.nfcUid
+                        ? <p className="text-xs text-stone-500">NTAG UID: <span className="font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{t.nfcUid}</span></p>
+                        : <p className="text-xs text-stone-400 italic">No NTAG UID assigned</p>
+                      }
+                      {stickerUrl ? (
+                        <div className="flex items-center gap-2 bg-stone-50 rounded-lg px-3 py-2">
+                          <p className="text-xs font-mono text-amber-700 break-all flex-1">{stickerUrl}</p>
+                          <button
+                            onClick={() => copyToClipboard(stickerUrl, t.id)}
+                            className="shrink-0 text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
+                          >{copiedId === t.id ? '✓ Copied' : 'Copy'}</button>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-stone-400">↑ Set the menu page URL above to generate the sticker URL</p>
+                      )}
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => openEditTable(t)} className="btn-secondary text-sm py-1.5 px-3">Edit</button>
-                      <button onClick={() => deleteTable(t.id)} className="btn-danger text-sm py-1.5 px-3">Delete</button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -397,17 +442,18 @@ export default function AdminPanel({ socket, serverUrl, serverInfo }) {
             <h2 className="text-xl font-bold text-stone-800">System Information</h2>
             <div className="card space-y-4">
               <div><p className="text-stone-400 text-sm mb-1">Server LAN IP</p><code className="text-amber-700 text-lg font-mono">{serverInfo.ip}:{serverInfo.port}</code></div>
-              <div><p className="text-stone-400 text-sm mb-1">Client Menu URL</p><code className="text-emerald-700 text-sm font-mono">http://{serverInfo.ip}:{serverInfo.port}/menu/[TABLE_ID]</code></div>
-              <div><p className="text-stone-400 text-sm mb-1">ESP32 WebSocket</p><code className="text-blue-700 text-sm font-mono">ws://{serverInfo.ip}:{serverInfo.port}/esp32</code></div>
+              <div><p className="text-stone-400 text-sm mb-1">Local Menu URL</p><code className="text-emerald-700 text-sm font-mono">http://{serverInfo.ip}:{serverInfo.port}/menu/[TABLE_ID]</code></div>
+              <div><p className="text-stone-400 text-sm mb-1">ESP32 WebSocket (LCD only)</p><code className="text-blue-700 text-sm font-mono">ws://{serverInfo.ip}:{serverInfo.port}/esp32</code></div>
             </div>
             <div className="card">
-              <p className="font-semibold text-stone-800 mb-3">ESP32 Setup</p>
+              <p className="font-semibold text-stone-800 mb-3">NTAG Sticker Setup</p>
               <ol className="text-sm text-stone-500 space-y-2 list-decimal list-inside">
-                <li>Flash <code className="text-amber-700 bg-stone-50 px-1 rounded">esp32/main.ino</code> to your ESP32</li>
-                <li>Set WiFi SSID and password in the sketch</li>
-                <li>Set <code className="text-amber-700 bg-stone-50 px-1 rounded">SERVER_IP</code> to <code className="text-emerald-700 bg-stone-50 px-1 rounded">{serverInfo.ip}</code></li>
-                <li>Set <code className="text-amber-700 bg-stone-50 px-1 rounded">MODULE_ID</code> (1-100) to match the module/table ID created in Admin</li>
-                <li>PN532 emulates NFC tag with menu URL; LCD updates live</li>
+                <li>Install <code className="text-amber-700 bg-stone-50 px-1 rounded">NFC Tools</code> app on your phone (Android or iPhone)</li>
+                <li>Go to <code className="text-amber-700 bg-stone-50 px-1 rounded">Tables & Stickers</code> tab and set your menu page URL</li>
+                <li>Copy the sticker URL for each table</li>
+                <li>In NFC Tools: Write → Add record → URL → paste URL <span className="text-red-500 font-medium">without the https:// prefix</span> (the app adds it automatically)</li>
+                <li>Hold phone to sticker until write confirms. Repeat per table with its own URL.</li>
+                <li>Optionally flash <code className="text-amber-700 bg-stone-50 px-1 rounded">esp32/main.ino</code> to an ESP32 for LCD order status display</li>
               </ol>
             </div>
           </div>
@@ -491,11 +537,14 @@ export default function AdminPanel({ socket, serverUrl, serverInfo }) {
         </Modal>
       )}
       {(modal === 'addTable' || modal === 'editTable') && (
-        <Modal title={modal === 'addTable' ? 'Add NFC Module' : 'Edit NFC Module'} onClose={() => setModal(null)}>
+        <Modal title={modal === 'addTable' ? 'Add Table' : 'Edit Table'} onClose={() => setModal(null)}>
           <div className="space-y-3">
             <div><label className="block text-sm text-stone-500 mb-1">Display Name</label><input className="input" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus /></div>
-            <div><label className="block text-sm text-stone-500 mb-1">Module ID (1-100)</label><input className="input" type="number" min="1" max="100" value={form.moduleId || ''} onChange={e => setForm(f => ({ ...f, moduleId: e.target.value }))} /></div>
-            <div><label className="block text-sm text-stone-500 mb-1">ESP32 IP (optional)</label><input className="input" placeholder="192.168.1.x" value={form.esp32Ip || ''} onChange={e => setForm(f => ({ ...f, esp32Ip: e.target.value }))} /></div>
+            <div><label className="block text-sm text-stone-500 mb-1">Table ID (1-100)</label><input className="input" type="number" min="1" max="100" value={form.moduleId || ''} onChange={e => setForm(f => ({ ...f, moduleId: e.target.value }))} /></div>
+            <div>
+              <label className="block text-sm text-stone-500 mb-1">NTAG UID <span className="text-stone-400">(read from NFC Tools app → scan tag → copy UID)</span></label>
+              <input className="input font-mono" placeholder="e.g. 04:A3:2F:1B:6C:90:81" value={form.nfcUid || ''} onChange={e => setForm(f => ({ ...f, nfcUid: e.target.value }))} />
+            </div>
             <div className="flex gap-3 pt-2">
               <button onClick={saveTable} disabled={saving} className="btn-primary flex-1">{saving ? 'Saving...' : 'Save'}</button>
               <button onClick={() => setModal(null)} className="btn-secondary flex-1">Cancel</button>
