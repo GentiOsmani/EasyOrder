@@ -6,7 +6,7 @@ import AdminPanel from './components/AdminPanel'
 import ManagerPanel from './components/ManagerPanel'
 import Header from './components/Header'
 
-const DEFAULT_SERVER_URL = 'http://localhost:3001'
+const DEFAULT_SERVER_URL = 'https://easyorder-19ze.onrender.com'
 const STAFF_SESSION_KEY = 'staffSessionUser'
 
 function getAppModeFromLocation() {

@@ -711,7 +711,8 @@ expressApp.post('/api/orders', (req, res) => {
   }
   db.get('orders').push(order).write()
   emitOrderNew(order)
-  sendToESP32(tableId, 'order:received', {})
+  const total = enrichedItems.reduce((sum, i) => sum + (i.price * (i.quantity || 1)), 0)
+  sendToESP32(tableId, 'order:received', { total: Math.round(total * 100) / 100 })
   res.json(order)
 })
 

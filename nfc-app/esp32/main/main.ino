@@ -166,9 +166,12 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t length) {
         updateLCD(l1, l2);
 
       } else if (strcmp(event, "order:received") == 0) {
+        float total = doc["data"]["total"] | 0.0f;
+        char totalLine[17];
+        snprintf(totalLine, sizeof(totalLine), "Total: EUR %.2f", total);
         phoneMsgUntil = 0;
         wakeLcdBacklight();
-        updateLCD("Order confirmed!", "Kitchen is on it");
+        updateLCD("Order confirmed!", String(totalLine));
 
       } else if (strcmp(event, "order:preparing") == 0) {
         phoneMsgUntil = 0;
