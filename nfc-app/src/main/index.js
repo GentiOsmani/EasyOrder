@@ -693,12 +693,11 @@ expressApp.post('/api/orders', (req, res) => {
   if (!table) return res.status(404).json({ error: 'Table not found' })
 
   const restaurantId = table.restaurantId || DEFAULT_RESTAURANT_ID
-  const menuItems = db.get('menuItems').filter({ restaurantId }).value()
   const enrichedItems = items.map(i => {
-    const mi = menuItems.find(m => m.id === i.menuItemId)
+    const mi = db.get('menuItems').find(m => Number(m.id) === Number(i.menuItemId)).value()
     return {
       id: genId(), menuItemId: i.menuItemId,
-      name: mi ? mi.name : 'Unknown', price: mi ? mi.price : 0,
+      name: mi ? mi.name : 'Unknown', price: mi ? Number(mi.price) : 0,
       quantity: i.quantity, notes: i.notes || '', done: false
     }
   })
