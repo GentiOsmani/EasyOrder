@@ -679,7 +679,7 @@ expressApp.delete('/api/tables/:id', (req, res) => {
 })
 
 expressApp.post('/api/orders', (req, res) => {
-  const { tableId, items, customerName, orderAccessToken } = req.body
+  const { tableId, items, customerName, orderAccessToken, total: clientTotal } = req.body
   if (!tableId || !items || items.length === 0) {
     return res.status(400).json({ error: 'Invalid order data' })
   }
@@ -711,7 +711,8 @@ expressApp.post('/api/orders', (req, res) => {
   }
   db.get('orders').push(order).write()
   emitOrderNew(order)
-  const total = enrichedItems.reduce((sum, i) => sum + (i.price * (i.quantity || 1)), 0)
+  const serverTotal = enrichedItems.reduce((sum, i) => sum + (i.price * (i.quantity || 1)), 0)
+  const total = (typeof clientTotal === 'number' && clientTotal > 0) ? clientTotal : serverTotal
   sendToESP32(tableId, 'order:received', { total: Math.round(total * 100) / 100 })
   res.json(order)
 })
