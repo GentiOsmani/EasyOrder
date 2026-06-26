@@ -176,7 +176,8 @@ async function placeOrder() {
       body: JSON.stringify({
         tableId,
         items: Object.entries(cart).map(([id,qty]) => ({ menuItemId: parseInt(id), quantity: qty })),
-        customerName: document.getElementById('customer-name').value.trim() || 'Guest'
+        customerName: document.getElementById('customer-name').value.trim() || 'Guest',
+        total: cartTotal()
       })
     })
     if (!res.ok) throw new Error()
