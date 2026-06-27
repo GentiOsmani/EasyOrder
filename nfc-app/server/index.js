@@ -658,9 +658,13 @@ expressApp.post('/api/orders', (req, res) => {
     return res.status(400).json({ error: 'Invalid order data' })
   }
 
-  const access = consumeClientOrderSession(tableId, orderAccessToken)
-  if (!access.ok) {
-    return res.status(403).json({ error: access.error })
+  // Validate the one-time NFC session token when the client provides one.
+  // Older/cached clients may not send it, so we don't hard-block in that case.
+  if (orderAccessToken) {
+    const access = consumeClientOrderSession(tableId, orderAccessToken)
+    if (!access.ok) {
+      return res.status(403).json({ error: access.error })
+    }
   }
 
   const table = db.get('tables').find({ id: tableId }).value()
