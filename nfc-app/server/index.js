@@ -89,7 +89,8 @@ db.defaults({
   users: [
     { id: 1, username: 'admin',     passwordHash: bcrypt.hashSync('123', 10), role: 'admin' },
     { id: 2, username: 'bartender', passwordHash: bcrypt.hashSync('123', 10), role: 'bartender', restaurantId: 1 },
-    { id: 3, username: 'manager',   passwordHash: bcrypt.hashSync('123', 10), role: 'manager', restaurantId: 1 }
+    { id: 3, username: 'manager',   passwordHash: bcrypt.hashSync('123', 10), role: 'manager', restaurantId: 1 },
+    { id: 4, username: 'waiter',    passwordHash: bcrypt.hashSync('123', 10), role: 'waiter', restaurantId: 1 }
   ],
   restaurants: [
     { id: 1, name: 'Default Restaurant', logoUrl: '' }
@@ -133,7 +134,7 @@ const nextRestaurants = currentRestaurants.length > 0
   : [{ id: DEFAULT_RESTAURANT_ID, name: 'Default Restaurant', logoUrl: '' }]
 
 const nextUsers = currentUsers.map(user => {
-  if (user.role === 'bartender' || user.role === 'manager') {
+  if (user.role === 'bartender' || user.role === 'manager' || user.role === 'waiter') {
     return { ...user, restaurantId: user.restaurantId || DEFAULT_RESTAURANT_ID }
   }
   return user
@@ -158,7 +159,7 @@ const nextDeviceBindings = {
 
 const migrationChanged =
   nextRestaurants.length !== currentRestaurants.length ||
-  currentUsers.some(user => (user.role === 'bartender' || user.role === 'manager') && !user.restaurantId) ||
+  currentUsers.some(user => (user.role === 'bartender' || user.role === 'manager' || user.role === 'waiter') && !user.restaurantId) ||
   currentCategories.some(cat => !cat.restaurantId) ||
   currentItems.some(item => !item.restaurantId) ||
   currentTables.some(table => !table.restaurantId || !table.moduleId || table.id !== table.moduleId) ||
@@ -216,13 +217,13 @@ function sanitizeUser(user) {
 
 function roleAllowedForAppMode(role, appMode) {
   if (appMode === 'admin') return role === 'admin'
-  return role === 'bartender' || role === 'manager'
+  return role === 'bartender' || role === 'manager' || role === 'waiter'
 }
 
 function roleErrorForAppMode(appMode) {
   return appMode === 'admin'
     ? 'This app is Admin Panel only. Use an admin account.'
-    : 'This app is Staff Terminal only. Use bartender/manager account.'
+    : 'This app is Staff Terminal only. Use a bartender, manager or waiter account.'
 }
 
 function getDeviceBindings() {
@@ -248,7 +249,7 @@ function clearStaffTerminalBinding() {
 }
 
 function getStaffUsers(restaurantId = null) {
-  let users = db.get('users').filter(u => u.role === 'bartender' || u.role === 'manager').value()
+  let users = db.get('users').filter(u => u.role === 'bartender' || u.role === 'manager' || u.role === 'waiter').value()
   if (restaurantId) users = users.filter(u => u.restaurantId === restaurantId)
   return users.map(sanitizeUser)
 }
@@ -357,7 +358,7 @@ expressApp.post('/api/auth/login', (req, res) => {
     return res.status(403).json({ error: roleErrorForAppMode(appMode) })
   }
 
-  if ((user.role === 'bartender' || user.role === 'manager') && !user.restaurantId) {
+  if ((user.role === 'bartender' || user.role === 'manager' || user.role === 'waiter') && !user.restaurantId) {
     return res.status(403).json({ error: 'This staff account is not assigned to a restaurant yet' })
   }
 
@@ -423,7 +424,7 @@ expressApp.post('/api/users', (req, res) => {
 
   if (!username) return res.status(400).json({ error: 'Username is required' })
   if (password.length < 3) return res.status(400).json({ error: 'Password must be at least 3 characters' })
-  if (!['bartender', 'manager'].includes(role)) return res.status(400).json({ error: 'Role must be bartender or manager' })
+  if (!['bartender', 'manager', 'waiter'].includes(role)) return res.status(400).json({ error: 'Role must be bartender, manager or waiter' })
   if (!restaurantId) return res.status(400).json({ error: 'Restaurant is required' })
   if (!db.get('restaurants').find({ id: restaurantId }).value()) return res.status(404).json({ error: 'Restaurant not found' })
   if (db.get('users').find({ username }).value()) return res.status(409).json({ error: 'Username already exists' })
@@ -451,7 +452,7 @@ expressApp.put('/api/users/:id', (req, res) => {
   const password = req.body?.password !== undefined ? String(req.body.password) : ''
 
   if (!username) return res.status(400).json({ error: 'Username is required' })
-  if (!['bartender', 'manager'].includes(role)) return res.status(400).json({ error: 'Role must be bartender or manager' })
+  if (!['bartender', 'manager', 'waiter'].includes(role)) return res.status(400).json({ error: 'Role must be bartender, manager or waiter' })
   if (!restaurantId) return res.status(400).json({ error: 'Restaurant is required' })
   if (!db.get('restaurants').find({ id: restaurantId }).value()) return res.status(404).json({ error: 'Restaurant not found' })
   if (db.get('users').find(u => u.username === username && u.id !== id).value()) {
@@ -800,6 +801,33 @@ io.on('connection', (socket) => {
     emitOrderRemoved(orderId, order.restaurantId)
     io.to(`table:${order.tableId}`).emit('order:completed', { orderId })
     sendToESP32(order.tableId, 'order:delivered', {})
+  })
+
+  socket.on('staff:settle_table', ({ tableId }) => {
+    const numericTableId = parseInt(tableId, 10)
+    if (!numericTableId) return
+    const table = db.get('tables').find({ id: numericTableId }).value()
+    const activeOrders = db.get('orders')
+      .filter(o => Number(o.tableId) === numericTableId && o.status !== 'completed')
+      .value()
+
+    const settledAt = new Date().toISOString()
+    activeOrders.forEach((order) => {
+      order.status = 'completed'
+      order.paid = true
+      order.paidAt = settledAt
+      order.updatedAt = settledAt
+      db.get('orders').find({ id: order.id }).assign(order).write()
+      emitOrderRemoved(order.id, order.restaurantId)
+    })
+
+    if (table) {
+      emitTablesUpdated(table.restaurantId || DEFAULT_RESTAURANT_ID)
+      sendToESP32(numericTableId, 'lcd:update', {
+        line1: table.name || `Table ${numericTableId}`,
+        line2: 'Tap to order'
+      })
+    }
   })
 
   socket.on('client:join_table', ({ tableId }) => {

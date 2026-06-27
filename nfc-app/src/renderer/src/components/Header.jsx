@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 
 export default function Header({ user, onLogout, connected, serverInfo, restaurant, appMode = 'staff' }) {
-  const roleColors = { bartender: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200/60', admin: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200/60', manager: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/60' }
-  const roleLabels = { bartender: '🍺 Bartender', admin: '⚙️ Admin', manager: '📊 Manager' }
+  const roleColors = { bartender: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200/60', admin: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200/60', manager: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/60', waiter: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200/60' }
+  const roleLabels = { bartender: '🍺 Bartender', admin: '⚙️ Admin', manager: '📊 Manager', waiter: '🍽️ Waiter' }
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {

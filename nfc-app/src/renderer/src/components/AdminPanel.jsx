@@ -223,7 +223,7 @@ export default function AdminPanel({ socket, serverUrl, serverInfo }) {
       restaurantId: parseInt(form.restaurantId, 10)
     }
     if (!body.username) return notify('Username is required', false)
-    if (!['bartender', 'manager'].includes(body.role)) return notify('Role must be bartender or manager', false)
+    if (!['bartender', 'manager', 'waiter'].includes(body.role)) return notify('Role must be bartender, manager or waiter', false)
     if (!Number.isInteger(body.restaurantId)) return notify('Please select a restaurant', false)
     if (modal === 'addUser' && body.password.length < 3) return notify('Password must be at least 3 characters', false)
     if (modal === 'editUser' && body.password && body.password.length < 3) return notify('Password must be at least 3 characters', false)
@@ -492,6 +492,7 @@ export default function AdminPanel({ socket, serverUrl, serverInfo }) {
               <select className="input" value={form.role || 'bartender'} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
                 <option value="bartender">Bartender</option>
                 <option value="manager">Manager</option>
+                <option value="waiter">Waiter</option>
               </select>
             </div>
             <div><label className="block text-sm text-stone-500 mb-1">Restaurant</label>

@@ -4,6 +4,7 @@ import Login from './components/Login'
 import BartenderBoard from './components/BartenderBoard'
 import AdminPanel from './components/AdminPanel'
 import ManagerPanel from './components/ManagerPanel'
+import WaiterPanel from './components/WaiterPanel'
 import Header from './components/Header'
 
 const DEFAULT_SERVER_URL = 'https://easyorder-19ze.onrender.com'
@@ -203,6 +204,7 @@ export default function App() {
         {user.role === 'bartender' && <BartenderBoard socket={socket} serverUrl={serverUrl} user={user} />}
         {user.role === 'admin'     && <AdminPanel     socket={socket} serverUrl={serverUrl} serverInfo={serverInfo} user={user} />}
         {user.role === 'manager'   && <ManagerPanel   socket={socket} serverUrl={serverUrl} user={user} />}
+        {user.role === 'waiter'    && <WaiterPanel    socket={socket} serverUrl={serverUrl} user={user} />}
       </main>
     </div>
   )
