@@ -204,6 +204,18 @@ if (migrationChanged) {
     .write()
 }
 
+// Ensure the default waiter account exists on databases created before the waiter role
+if (!db.get('users').find({ username: 'waiter' }).value()) {
+  const existingIds = db.get('users').value().map(u => u.id)
+  db.get('users').push({
+    id: existingIds.includes(4) ? Date.now() : 4,
+    username: 'waiter',
+    passwordHash: bcrypt.hashSync('123', 10),
+    role: 'waiter',
+    restaurantId: DEFAULT_RESTAURANT_ID
+  }).write()
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function getLocalIP() {
   const nets = os.networkInterfaces()
