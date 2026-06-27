@@ -1,0 +1,13 @@
+{
+  "name": "TapDine",
+  "short_name": "TapDine",
+  "description": "Tap. Order. Dine. Order right from your table.",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "theme_color": "#a3713f",
+  "background_color": "#f8f5ef",
+  "display": "standalone",
+  "start_url": "/"
+}
