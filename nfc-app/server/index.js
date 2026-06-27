@@ -55,7 +55,34 @@ const dataDir   = path.join(__dirname, 'data')
 // ─── Database Setup ───────────────────────────────────────────────────────────
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true })
 
-const adapter = new FileSync(path.join(dataDir, 'db.json'))
+const MONGODB_URI = process.env.MONGODB_URI || ''
+const MONGODB_DB  = process.env.MONGODB_DB || 'easyorder'
+
+// In production (Render) the filesystem is ephemeral, so a local JSON file is
+// wiped on every restart/redeploy. This adapter keeps lowdb's fully-synchronous
+// API intact but mirrors every write to MongoDB and hydrates from it on boot.
+// When MONGODB_URI is not set (local dev / Electron) it falls back to a file.
+class MongoMirrorAdapter {
+  constructor() {
+    this.state = {}
+    this.persistReady = false
+    this.onPersist = null
+  }
+  read() { return this.state }
+  write(data) {
+    this.state = data
+    if (this.persistReady && this.onPersist) this.onPersist(data)
+  }
+}
+
+let mongoAdapter = null
+let adapter
+if (MONGODB_URI) {
+  mongoAdapter = new MongoMirrorAdapter()
+  adapter = mongoAdapter
+} else {
+  adapter = new FileSync(path.join(dataDir, 'db.json'))
+}
 const db = low(adapter)
 
 db.defaults({
@@ -913,6 +940,50 @@ function sendLCDUpdate(tableId, line1, line2) {
 }
 
 // ─── HTTP Server ──────────────────────────────────────────────────────────────
-httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Server] http://0.0.0.0:${PORT}  LAN: http://${getLocalIP()}:${PORT}`)
-})
+async function connectMongoAndHydrate() {
+  const { MongoClient } = require('mongodb')
+  const client = new MongoClient(MONGODB_URI)
+  await client.connect()
+  const coll = client.db(MONGODB_DB).collection('appstate')
+
+  // Load persisted state (if any) into the in-memory db.
+  const stored = await coll.findOne({ _id: 'state' })
+  if (stored && stored.data && Object.keys(stored.data).length) {
+    db.setState(stored.data)
+  }
+
+  // Debounce writes so a burst of db.write() calls coalesces into one upsert.
+  let persistTimer = null
+  let pendingState = null
+  mongoAdapter.onPersist = (data) => {
+    pendingState = data
+    if (persistTimer) return
+    persistTimer = setTimeout(() => {
+      const toSave = pendingState
+      persistTimer = null
+      pendingState = null
+      coll.updateOne({ _id: 'state' }, { $set: { data: toSave } }, { upsert: true })
+        .catch(err => console.error('[Mongo] persist error:', err.message))
+    }, 400)
+  }
+  mongoAdapter.persistReady = true
+
+  // Persist current state (seeds defaults on first ever run).
+  await coll.updateOne({ _id: 'state' }, { $set: { data: db.getState() } }, { upsert: true })
+  console.log(`[Mongo] connected (db: ${MONGODB_DB}); state hydrated & persisted`)
+}
+
+async function startServer() {
+  if (mongoAdapter) {
+    try {
+      await connectMongoAndHydrate()
+    } catch (err) {
+      console.error('[Mongo] connection failed, continuing with in-memory state:', err.message)
+    }
+  }
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Server] http://0.0.0.0:${PORT}  LAN: http://${getLocalIP()}:${PORT}`)
+  })
+}
+
+startServer()

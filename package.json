@@ -1,0 +1,34 @@
+{
+  "name": "restaurant-nfc-system",
+  "version": "1.0.0",
+  "description": "Restaurant NFC ordering system with Electron, ESP32, and PN532",
+  "main": "main.js",
+  "scripts": {
+    "start": "npm run build && npx electron .",
+    "dev": "concurrently -n VITE,ELECTRON -c cyan,green \"vite\" \"cross-env NODE_ENV=development npx electron .\"",
+    "build": "vite build",
+    "electron": "npx electron ."
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "lowdb": "^1.0.0",
+    "mongodb": "^6.3.0",
+    "socket.io": "^4.6.1",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^28.1.4",
+    "postcss": "^8.4.32",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "socket.io-client": "^4.6.1",
+    "tailwindcss": "^3.4.0",
+    "vite": "^5.0.8"
+  }
+}
